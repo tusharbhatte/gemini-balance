@@ -182,7 +182,24 @@ class GeminiChatService:
                 error_code=status_code,
                 request_msg=payload
             )
-            raise e
+            
+            # 生成友好的错误响应返回给用户
+            if settings.USER_FRIENDLY_ERRORS_ENABLED:
+                from app.handler.user_friendly_errors import user_friendly_error_handler
+                friendly_response = user_friendly_error_handler.handle_api_error(
+                    error_log_msg,
+                    include_original=settings.INCLUDE_TECHNICAL_DETAILS
+                )
+                return friendly_response
+            else:
+                # 返回标准化的错误响应
+                return {
+                    "error": {
+                        "code": status_code,
+                        "message": error_log_msg,
+                        "status": "FAILED"
+                    }
+                }
         finally:
             end_time = time.perf_counter()
             latency_ms = int((end_time - start_time) * 1000)
@@ -273,6 +290,26 @@ class GeminiChatService:
                     logger.error(
                         f"Max retries ({max_retries}) reached for streaming."
                     )
+                    
+                    # 达到最大重试次数后，返回友好错误响应给用户
+                    if settings.USER_FRIENDLY_ERRORS_ENABLED:
+                        from app.handler.user_friendly_errors import user_friendly_error_handler
+                        friendly_response = user_friendly_error_handler.handle_api_error(
+                            error_log_msg,
+                            include_original=settings.INCLUDE_TECHNICAL_DETAILS
+                        )
+                    else:
+                        # 返回标准化的错误响应
+                        friendly_response = {
+                            "error": {
+                                "code": status_code,
+                                "message": error_log_msg,
+                                "status": "FAILED"
+                            }
+                        }
+                    
+                    # 以SSE格式返回错误响应
+                    yield f"data: {json.dumps(friendly_response)}\n\n"
                     break
             finally:
                 end_time = time.perf_counter()

@@ -236,7 +236,26 @@ class OpenAIChatService:
                 error_code=status_code,
                 request_msg=payload,
             )
-            raise e
+            
+            # 生成友好的错误响应返回给用户
+            if settings.USER_FRIENDLY_ERRORS_ENABLED:
+                from app.handler.user_friendly_errors import user_friendly_error_handler
+                friendly_response = user_friendly_error_handler.handle_api_error(
+                    error_log_msg,
+                    include_original=settings.INCLUDE_TECHNICAL_DETAILS
+                )
+                # 为OpenAI格式包装错误响应
+                return self.response_handler.handle_error_response(friendly_response, model)
+            else:
+                # 返回标准化的错误响应
+                standard_error = {
+                    "error": {
+                        "code": status_code,
+                        "message": error_log_msg,
+                        "status": "FAILED"
+                    }
+                }
+                return self.response_handler.handle_error_response(standard_error, model)
         finally:
             end_time = time.perf_counter()
             latency_ms = int((end_time - start_time) * 1000)
@@ -467,7 +486,19 @@ class OpenAIChatService:
             logger.error(
                 f"Streaming failed permanently for model {model} after {retries} attempts."
             )
-            yield f"data: {json.dumps({'error': f'Streaming failed after {retries} retries.'})}\n\n"
+            
+            # 返回友好错误响应给用户
+            if settings.USER_FRIENDLY_ERRORS_ENABLED:
+                from app.handler.user_friendly_errors import user_friendly_error_handler
+                friendly_response = user_friendly_error_handler.handle_api_error(
+                    f"Streaming failed after {retries} retries",
+                    include_original=settings.INCLUDE_TECHNICAL_DETAILS
+                )
+                error_chunk = self.response_handler.handle_error_response(friendly_response, model)
+            else:
+                error_chunk = {'error': f'Streaming failed after {retries} retries.'}
+            
+            yield f"data: {json.dumps(error_chunk)}\n\n"
             yield "data: [DONE]\n\n"
 
     async def create_image_chat_completion(
@@ -589,7 +620,24 @@ class OpenAIChatService:
                 error_code=status_code,
                 request_msg={"image_data_truncated": image_data[:1000]},
             )
-            raise e
+            
+            # 返回友好错误响应而不是抛出异常
+            if settings.USER_FRIENDLY_ERRORS_ENABLED:
+                from app.handler.user_friendly_errors import user_friendly_error_handler
+                friendly_response = user_friendly_error_handler.handle_api_error(
+                    error_log_msg,
+                    include_original=settings.INCLUDE_TECHNICAL_DETAILS
+                )
+                return self.response_handler.handle_error_response(friendly_response, model)
+            else:
+                standard_error = {
+                    "error": {
+                        "code": status_code,
+                        "message": error_log_msg,
+                        "status": "FAILED"
+                    }
+                }
+                return self.response_handler.handle_error_response(standard_error, model)
         finally:
             end_time = time.perf_counter()
             latency_ms = int((end_time - start_time) * 1000)

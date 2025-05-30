@@ -113,6 +113,42 @@ class OpenAIResponseHandler(ResponseHandler):
             return _handle_openai_stream_image_response(image_str, model, finish_reason)
         return _handle_openai_normal_image_response(image_str, model, finish_reason)
 
+    def handle_error_response(
+        self, error_data: Dict[str, Any], model: str
+    ) -> Dict[str, Any]:
+        """处理错误响应，将其转换为OpenAI格式"""
+        error_message = "An error occurred"
+        error_code = 500
+        
+        if isinstance(error_data, dict) and "error" in error_data:
+            error_info = error_data["error"]
+            if isinstance(error_info, dict):
+                error_message = error_info.get("message", error_message)
+                error_code = error_info.get("code", error_code)
+        
+        return {
+            "id": f"chatcmpl-{uuid.uuid4()}",
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": model,
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant", 
+                        "content": error_message
+                    },
+                    "finish_reason": "stop",
+                }
+            ],
+            "error": {
+                "code": error_code,
+                "message": error_message,
+                "type": "api_error"
+            },
+            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+        }
+
 
 def _handle_openai_stream_image_response(
     image_str: str, model: str, finish_reason: str

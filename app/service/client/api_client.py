@@ -2,6 +2,7 @@
 
 from typing import Dict, Any, AsyncGenerator, Optional
 import httpx
+import json
 import random
 from abc import ABC, abstractmethod
 from app.config.config import settings
@@ -10,6 +11,16 @@ from app.handler.user_friendly_errors import user_friendly_error_handler
 
 DEFAULT_TIMEOUT = 30
 logger = get_api_client_logger()
+
+
+class ApiErrorWithResponse(Exception):
+    """包含友好错误响应的API异常"""
+    
+    def __init__(self, message: str, status_code: int, error_response: Dict[str, Any]):
+        super().__init__(message)
+        self.status_code = status_code
+        self.error_response = error_response
+
 
 class ApiClient(ABC):
     """API客户端基类"""
@@ -22,37 +33,46 @@ class ApiClient(ABC):
     async def stream_generate_content(self, payload: Dict[str, Any], model: str, api_key: str) -> AsyncGenerator[str, None]:
         pass
 
-    def _handle_api_error(self, status_code: int, error_content: str) -> Exception:
+    def _handle_api_error(self, status_code: int, error_content: str) -> Dict[str, Any]:
         """
-        统一处理API错误，根据配置返回用户友好或技术性错误信息
+        统一处理API错误，生成友好错误响应并抛出异常
         
         Args:
             status_code: HTTP状态码
             error_content: 原始错误内容
             
         Returns:
-            处理后的异常对象
+            不会实际返回，总是抛出异常
+            
+        Raises:
+            ApiErrorWithResponse: 包含友好错误响应的异常
         """
+        # 生成友好的错误响应
         if settings.USER_FRIENDLY_ERRORS_ENABLED:
             # 使用用户友好错误处理器
             friendly_response = user_friendly_error_handler.handle_api_error(
                 error_content, 
                 include_original=settings.INCLUDE_TECHNICAL_DETAILS
             )
-            
-            # 从友好响应中提取消息
-            friendly_message = friendly_response.get("error", {}).get("message", "调用远程服务出现问题")
-            
-            # 如果包含技术细节，添加到错误消息中
-            if settings.INCLUDE_TECHNICAL_DETAILS and "original_error" in friendly_response.get("error", {}):
-                original_msg = friendly_response["error"]["original_error"].get("message", "")
-                if original_msg:
-                    friendly_message = f"{friendly_message} (技术详情: {original_msg})"
-            
-            return Exception(f"API call failed with status code {status_code}, {friendly_message}")
         else:
-            # 使用原始错误信息
-            return Exception(f"API call failed with status code {status_code}, {error_content}")
+            # 返回原始错误信息的标准化格式
+            friendly_response = {
+                "error": {
+                    "code": status_code,
+                    "message": error_content,
+                    "status": "FAILED"
+                }
+            }
+        
+        # 创建包含友好响应的异常
+        error_exception = ApiErrorWithResponse(
+            message=f"API call failed with status {status_code}: {error_content}",
+            status_code=status_code,
+            error_response=friendly_response
+        )
+        
+        logger.error(f"API error occurred: {error_content}")
+        raise error_exception
 
 
 class GeminiApiClient(ApiClient):
@@ -110,7 +130,7 @@ class GeminiApiClient(ApiClient):
             response = await client.post(url, json=payload)
             if response.status_code != 200:
                 error_content = response.text
-                raise self._handle_api_error(response.status_code, error_content)
+                return self._handle_api_error(response.status_code, error_content)
             return response.json()
 
     async def stream_generate_content(self, payload: Dict[str, Any], model: str, api_key: str) -> AsyncGenerator[str, None]:
@@ -128,7 +148,27 @@ class GeminiApiClient(ApiClient):
                 if response.status_code != 200:
                     error_content = await response.aread()
                     error_msg = error_content.decode("utf-8")
-                    raise self._handle_api_error(response.status_code, error_msg)
+                    # 对于流式响应，我们同时记录错误并返回友好错误响应
+                    logger.error(f"API error occurred: {error_msg}")
+                    
+                    # 生成友好的错误响应
+                    if settings.USER_FRIENDLY_ERRORS_ENABLED:
+                        friendly_response = user_friendly_error_handler.handle_api_error(
+                            error_msg, 
+                            include_original=settings.INCLUDE_TECHNICAL_DETAILS
+                        )
+                    else:
+                        friendly_response = {
+                            "error": {
+                                "code": response.status_code,
+                                "message": error_msg,
+                                "status": "FAILED"
+                            }
+                        }
+                    
+                    # 以SSE格式返回错误，但不抛出异常（因为这会中断生成器）
+                    yield f"data: {json.dumps(friendly_response)}\n\n"
+                    return
                 async for line in response.aiter_lines():
                     yield line
 
@@ -148,7 +188,7 @@ class OpenaiApiClient(ApiClient):
             response = await client.get(url, headers=headers)
             if response.status_code != 200:
                 error_content = response.text
-                raise self._handle_api_error(response.status_code, error_content)
+                return self._handle_api_error(response.status_code, error_content)
             return response.json()
 
     async def generate_content(self, payload: Dict[str, Any], api_key: str) -> Dict[str, Any]:
@@ -165,7 +205,7 @@ class OpenaiApiClient(ApiClient):
             response = await client.post(url, json=payload, headers=headers)
             if response.status_code != 200:
                 error_content = response.text
-                raise self._handle_api_error(response.status_code, error_content)
+                return self._handle_api_error(response.status_code, error_content)
             return response.json()
 
     async def stream_generate_content(self, payload: Dict[str, Any], api_key: str) -> AsyncGenerator[str, None]:
@@ -183,7 +223,10 @@ class OpenaiApiClient(ApiClient):
                 if response.status_code != 200:
                     error_content = await response.aread()
                     error_msg = error_content.decode("utf-8")
-                    raise self._handle_api_error(response.status_code, error_msg)
+                    error_response = self._handle_api_error(response.status_code, error_msg)
+                    # 对于流式响应，我们需要以SSE格式返回错误
+                    yield f"data: {json.dumps(error_response)}\n\n"
+                    return
                 async for line in response.aiter_lines():
                     yield line
     
@@ -205,7 +248,7 @@ class OpenaiApiClient(ApiClient):
             response = await client.post(url, json=payload, headers=headers)
             if response.status_code != 200:
                 error_content = response.text
-                raise self._handle_api_error(response.status_code, error_content)
+                return self._handle_api_error(response.status_code, error_content)
             return response.json()
                     
     async def generate_images(self, payload: Dict[str, Any], api_key: str) -> Dict[str, Any]:
@@ -222,5 +265,5 @@ class OpenaiApiClient(ApiClient):
             response = await client.post(url, json=payload, headers=headers)
             if response.status_code != 200:
                 error_content = response.text
-                raise self._handle_api_error(response.status_code, error_content)
+                return self._handle_api_error(response.status_code, error_content)
             return response.json()
