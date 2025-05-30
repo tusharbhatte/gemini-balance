@@ -6,8 +6,9 @@ import random
 from abc import ABC, abstractmethod
 from app.config.config import settings
 from app.log.logger import get_api_client_logger
-from app.core.constants import DEFAULT_TIMEOUT
+from app.handler.user_friendly_errors import user_friendly_error_handler
 
+DEFAULT_TIMEOUT = 30
 logger = get_api_client_logger()
 
 class ApiClient(ABC):
@@ -20,6 +21,38 @@ class ApiClient(ABC):
     @abstractmethod
     async def stream_generate_content(self, payload: Dict[str, Any], model: str, api_key: str) -> AsyncGenerator[str, None]:
         pass
+
+    def _handle_api_error(self, status_code: int, error_content: str) -> Exception:
+        """
+        统一处理API错误，根据配置返回用户友好或技术性错误信息
+        
+        Args:
+            status_code: HTTP状态码
+            error_content: 原始错误内容
+            
+        Returns:
+            处理后的异常对象
+        """
+        if settings.USER_FRIENDLY_ERRORS_ENABLED:
+            # 使用用户友好错误处理器
+            friendly_response = user_friendly_error_handler.handle_api_error(
+                error_content, 
+                include_original=settings.INCLUDE_TECHNICAL_DETAILS
+            )
+            
+            # 从友好响应中提取消息
+            friendly_message = friendly_response.get("error", {}).get("message", "调用远程服务出现问题")
+            
+            # 如果包含技术细节，添加到错误消息中
+            if settings.INCLUDE_TECHNICAL_DETAILS and "original_error" in friendly_response.get("error", {}):
+                original_msg = friendly_response["error"]["original_error"].get("message", "")
+                if original_msg:
+                    friendly_message = f"{friendly_message} (技术详情: {original_msg})"
+            
+            return Exception(f"API call failed with status code {status_code}, {friendly_message}")
+        else:
+            # 使用原始错误信息
+            return Exception(f"API call failed with status code {status_code}, {error_content}")
 
 
 class GeminiApiClient(ApiClient):
@@ -77,7 +110,7 @@ class GeminiApiClient(ApiClient):
             response = await client.post(url, json=payload)
             if response.status_code != 200:
                 error_content = response.text
-                raise Exception(f"API call failed with status code {response.status_code}, {error_content}")
+                raise self._handle_api_error(response.status_code, error_content)
             return response.json()
 
     async def stream_generate_content(self, payload: Dict[str, Any], model: str, api_key: str) -> AsyncGenerator[str, None]:
@@ -95,7 +128,7 @@ class GeminiApiClient(ApiClient):
                 if response.status_code != 200:
                     error_content = await response.aread()
                     error_msg = error_content.decode("utf-8")
-                    raise Exception(f"API call failed with status code {response.status_code}, {error_msg}")
+                    raise self._handle_api_error(response.status_code, error_msg)
                 async for line in response.aiter_lines():
                     yield line
 
@@ -115,7 +148,7 @@ class OpenaiApiClient(ApiClient):
             response = await client.get(url, headers=headers)
             if response.status_code != 200:
                 error_content = response.text
-                raise Exception(f"API call failed with status code {response.status_code}, {error_content}")
+                raise self._handle_api_error(response.status_code, error_content)
             return response.json()
 
     async def generate_content(self, payload: Dict[str, Any], api_key: str) -> Dict[str, Any]:
@@ -132,7 +165,7 @@ class OpenaiApiClient(ApiClient):
             response = await client.post(url, json=payload, headers=headers)
             if response.status_code != 200:
                 error_content = response.text
-                raise Exception(f"API call failed with status code {response.status_code}, {error_content}")
+                raise self._handle_api_error(response.status_code, error_content)
             return response.json()
 
     async def stream_generate_content(self, payload: Dict[str, Any], api_key: str) -> AsyncGenerator[str, None]:
@@ -150,7 +183,7 @@ class OpenaiApiClient(ApiClient):
                 if response.status_code != 200:
                     error_content = await response.aread()
                     error_msg = error_content.decode("utf-8")
-                    raise Exception(f"API call failed with status code {response.status_code}, {error_msg}")
+                    raise self._handle_api_error(response.status_code, error_msg)
                 async for line in response.aiter_lines():
                     yield line
     
@@ -172,7 +205,7 @@ class OpenaiApiClient(ApiClient):
             response = await client.post(url, json=payload, headers=headers)
             if response.status_code != 200:
                 error_content = response.text
-                raise Exception(f"API call failed with status code {response.status_code}, {error_content}")
+                raise self._handle_api_error(response.status_code, error_content)
             return response.json()
                     
     async def generate_images(self, payload: Dict[str, Any], api_key: str) -> Dict[str, Any]:
@@ -189,5 +222,5 @@ class OpenaiApiClient(ApiClient):
             response = await client.post(url, json=payload, headers=headers)
             if response.status_code != 200:
                 error_content = response.text
-                raise Exception(f"API call failed with status code {response.status_code}, {error_content}")
+                raise self._handle_api_error(response.status_code, error_content)
             return response.json()

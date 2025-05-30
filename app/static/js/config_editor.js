@@ -486,6 +486,12 @@ document.addEventListener("DOMContentLoaded", function () {
       openModelHelperModal();
     });
   });
+
+    // 添加自定义错误消息映射按钮
+    const addCustomErrorMappingBtn = document.getElementById("addCustomErrorMappingBtn");
+    if (addCustomErrorMappingBtn) {
+        addCustomErrorMappingBtn.addEventListener("click", () => addCustomErrorMapping());
+    }
 }); // <-- DOMContentLoaded end
 
 /**
@@ -986,6 +992,10 @@ function populateForm(config) {
     // });
   }
   // --- 结束：处理假流式配置的字段 ---
+
+    // --- 新增：处理自定义错误消息映射 ---
+    populateCustomErrorMappings(config.CUSTOM_ERROR_MAPPINGS || {});
+    // --- 结束：处理自定义错误消息映射 ---
 }
 
 /**
@@ -1720,6 +1730,10 @@ function collectFormData() {
   }
   // --- 结束：收集假流式配置 ---
 
+    // --- 新增：收集自定义错误消息映射 ---
+    formData.CUSTOM_ERROR_MAPPINGS = collectCustomErrorMappings();
+    // --- 结束：收集自定义错误消息映射 ---
+
   return formData;
 }
 
@@ -2171,3 +2185,129 @@ function handleModelSelection(selectedModelId) {
 }
 
 // -- End Model Helper Functions --
+
+// -- Custom Error Mappings Functions --
+
+/**
+ * Adds a new custom error mapping item.
+ */
+function addCustomErrorMapping() {
+    const container = document.getElementById("CUSTOM_ERROR_MAPPINGS_container");
+    if (!container) return;
+
+    // Remove placeholder if it exists
+    const placeholder = container.querySelector(".text-gray-500.italic");
+    if (placeholder) {
+        placeholder.remove();
+    }
+
+    const mappingItem = document.createElement("div");
+    mappingItem.className = "custom-error-mapping-item flex flex-col md:flex-row items-start md:items-center gap-3 p-3 bg-white bg-opacity-10 rounded-lg border border-violet-300 border-opacity-30";
+
+    const keywordInput = document.createElement("input");
+    keywordInput.type = "text";
+    keywordInput.placeholder = "错误关键词";
+    keywordInput.className = "custom-error-keyword flex-1 px-3 py-2 rounded-md form-input-themed";
+
+    const messageInput = document.createElement("input");
+    messageInput.type = "text";
+    messageInput.placeholder = "友好提示消息";
+    messageInput.className = "custom-error-message flex-1 px-3 py-2 rounded-md form-input-themed";
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "text-red-400 hover:text-red-300 focus:outline-none transition-colors";
+    removeBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
+    removeBtn.title = "删除映射";
+    removeBtn.addEventListener("click", function () {
+        mappingItem.remove();
+        // If container is empty, add placeholder back
+        if (container.children.length === 0) {
+            container.innerHTML = '<div class="text-gray-500 text-sm italic">暂无自定义错误消息映射。点击"添加映射"按钮开始配置。</div>';
+        }
+    });
+
+    mappingItem.appendChild(keywordInput);
+    mappingItem.appendChild(messageInput);
+    mappingItem.appendChild(removeBtn);
+    container.appendChild(mappingItem);
+}
+
+/**
+ * Populates custom error mappings from config data.
+ * @param {object} mappings - The custom error mappings object.
+ */
+function populateCustomErrorMappings(mappings) {
+    const container = document.getElementById("CUSTOM_ERROR_MAPPINGS_container");
+    if (!container) return;
+
+    // Clear existing content
+    container.innerHTML = "";
+
+    const mappingEntries = Object.entries(mappings || {});
+
+    if (mappingEntries.length === 0) {
+        container.innerHTML = '<div class="text-gray-500 text-sm italic">暂无自定义错误消息映射。点击"添加映射"按钮开始配置。</div>';
+        return;
+    }
+
+    mappingEntries.forEach(([keyword, message]) => {
+        const mappingItem = document.createElement("div");
+        mappingItem.className = "custom-error-mapping-item flex flex-col md:flex-row items-start md:items-center gap-3 p-3 bg-white bg-opacity-10 rounded-lg border border-violet-300 border-opacity-30";
+
+        const keywordInput = document.createElement("input");
+        keywordInput.type = "text";
+        keywordInput.value = keyword;
+        keywordInput.placeholder = "错误关键词";
+        keywordInput.className = "custom-error-keyword flex-1 px-3 py-2 rounded-md form-input-themed";
+
+        const messageInput = document.createElement("input");
+        messageInput.type = "text";
+        messageInput.value = message;
+        messageInput.placeholder = "友好提示消息";
+        messageInput.className = "custom-error-message flex-1 px-3 py-2 rounded-md form-input-themed";
+
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "text-red-400 hover:text-red-300 focus:outline-none transition-colors";
+        removeBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
+        removeBtn.title = "删除映射";
+        removeBtn.addEventListener("click", function () {
+            mappingItem.remove();
+            // If container is empty, add placeholder back
+            if (container.children.length === 0) {
+                container.innerHTML = '<div class="text-gray-500 text-sm italic">暂无自定义错误消息映射。点击"添加映射"按钮开始配置。</div>';
+            }
+        });
+
+        mappingItem.appendChild(keywordInput);
+        mappingItem.appendChild(messageInput);
+        mappingItem.appendChild(removeBtn);
+        container.appendChild(mappingItem);
+    });
+}
+
+/**
+ * Collects custom error mappings from the form.
+ * @returns {object} Custom error mappings object.
+ */
+function collectCustomErrorMappings() {
+    const container = document.getElementById("CUSTOM_ERROR_MAPPINGS_container");
+    if (!container) return {};
+
+    const mappings = {};
+    const mappingItems = container.querySelectorAll(".custom-error-mapping-item");
+
+    mappingItems.forEach(item => {
+        const keywordInput = item.querySelector(".custom-error-keyword");
+        const messageInput = item.querySelector(".custom-error-message");
+
+        if (keywordInput && messageInput && keywordInput.value.trim() && messageInput.value.trim()) {
+            mappings[keywordInput.value.trim()] = messageInput.value.trim();
+        }
+    });
+
+    return mappings;
+}
+
+// -- End Custom Error Mappings Functions --

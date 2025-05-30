@@ -110,6 +110,14 @@ class Settings(BaseSettings):
     AUTO_DELETE_REQUEST_LOGS_DAYS: int = 30
     SAFETY_SETTINGS: List[Dict[str, str]] = DEFAULT_SAFETY_SETTINGS
 
+    # 用户友好错误处理配置
+    USER_FRIENDLY_ERRORS_ENABLED: bool = True  # 是否启用用户友好错误消息
+    INCLUDE_TECHNICAL_DETAILS: bool = False    # 是否在错误响应中包含技术细节
+    DEBUG_MODE: bool = False                   # 调试模式，显示更详细的错误信息
+    
+    # 自定义错误消息映射配置（通过环境变量配置）
+    CUSTOM_ERROR_MAPPINGS: Dict[str, str] = {}  # 自定义错误消息映射，key为匹配的错误文本，value为替换的友好消息
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # 设置默认AUTH_TOKEN（如果未提供）
@@ -171,6 +179,40 @@ def _parse_db_value(key: str, db_value: str, target_type: Type) -> Any:
                 else:
                     logger.error(
                         f"Could not parse '{db_value}' as Dict[str, float] for key '{key}': {e1}. Returning empty dict."
+                    )
+            return parsed_dict
+        # 处理 Dict[str, str] (新增)
+        elif target_type == Dict[str, str]:
+            parsed_dict = {}
+            try:
+                parsed = json.loads(db_value)
+                if isinstance(parsed, dict):
+                    parsed_dict = {str(k): str(v) for k, v in parsed.items()}
+                else:
+                    logger.warning(
+                        f"Parsed DB value for key '{key}' is not a dictionary type. Value: {db_value}"
+                    )
+            except (json.JSONDecodeError, ValueError, TypeError) as e1:
+                if isinstance(e1, json.JSONDecodeError) and "'" in db_value:
+                    logger.warning(
+                        f"Failed initial JSON parse for key '{key}'. Attempting to replace single quotes. Error: {e1}"
+                    )
+                    try:
+                        corrected_db_value = db_value.replace("'", '"')
+                        parsed = json.loads(corrected_db_value)
+                        if isinstance(parsed, dict):
+                            parsed_dict = {str(k): str(v) for k, v in parsed.items()}
+                        else:
+                            logger.warning(
+                                f"Parsed DB value (after quote replacement) for key '{key}' is not a dictionary type. Value: {corrected_db_value}"
+                            )
+                    except (json.JSONDecodeError, ValueError, TypeError) as e2:
+                        logger.error(
+                            f"Could not parse '{db_value}' as Dict[str, str] for key '{key}' even after replacing quotes: {e2}. Returning empty dict."
+                        )
+                else:
+                    logger.error(
+                        f"Could not parse '{db_value}' as Dict[str, str] for key '{key}': {e1}. Returning empty dict."
                     )
             return parsed_dict
         # 处理 List[Dict[str, str]]
@@ -303,9 +345,14 @@ async def sync_initial_settings():
                                 parsed_db_value, dict
                             ):
                                 type_match = True
+                            elif target_type == Dict[str, str] and isinstance(
+                                parsed_db_value, dict
+                            ):
+                                type_match = True
                             elif target_type not in (
                                 List[str],
                                 Dict[str, float],
+                                Dict[str, str],
                             ) and isinstance(parsed_db_value, target_type):
                                 type_match = True
 
