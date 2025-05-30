@@ -212,6 +212,8 @@ class GeminiChatService:
         is_success = False
         status_code = None
         final_api_key = api_key
+        original_error_msg = None  # 保存第一次从Google API收到的原始错误
+        original_status_code = None
 
         while retries < max_retries:
             request_datetime = datetime.datetime.now()
@@ -250,11 +252,23 @@ class GeminiChatService:
             except Exception as e:
                 retries += 1
                 is_success = False
-                error_log_msg = str(e)
+                current_error_msg = str(e)
+                
+                # 保存第一次从Google API收到的原始错误
+                if original_error_msg is None:
+                    original_error_msg = current_error_msg
+                    match = re.search(r"status code (\d+)", current_error_msg)
+                    if match:
+                        original_status_code = int(match.group(1))
+                    else:
+                        original_status_code = 500
+                
                 logger.warning(
-                    f"Streaming API call failed with error: {error_log_msg}. Attempt {retries} of {max_retries}"
+                    f"Streaming API call failed with error: {current_error_msg}. Attempt {retries} of {max_retries}"
                 )
-                match = re.search(r"status code (\d+)", error_log_msg)
+                
+                # 使用当前错误的状态码进行日志记录
+                match = re.search(r"status code (\d+)", current_error_msg)
                 if match:
                     status_code = int(match.group(1))
                 else:
@@ -264,7 +278,7 @@ class GeminiChatService:
                     gemini_key=current_attempt_key,
                     model_name=model,
                     error_type="gemini-chat-stream",
-                    error_log=error_log_msg,
+                    error_log=current_error_msg,
                     error_code=status_code,
                     request_msg=payload
                 )
@@ -281,19 +295,19 @@ class GeminiChatService:
                         f"Max retries ({max_retries}) reached for streaming."
                     )
                     
-                    # 达到最大重试次数后，返回友好错误响应给用户
+                    # 达到最大重试次数后，返回原始Google API错误响应给用户
                     if settings.USER_FRIENDLY_ERRORS_ENABLED:
                         from app.handler.user_friendly_errors import user_friendly_error_handler
                         friendly_response = user_friendly_error_handler.handle_api_error(
-                            error_log_msg,
+                            original_error_msg,  # 使用原始错误而不是重试错误
                             include_original=settings.INCLUDE_TECHNICAL_DETAILS
                         )
                     else:
                         # 返回标准化的错误响应
                         friendly_response = {
                             "error": {
-                                "code": status_code,
-                                "message": error_log_msg,
+                                "code": original_status_code,  # 使用原始状态码
+                                "message": original_error_msg,  # 使用原始错误信息
                                 "status": "FAILED"
                             }
                         }
