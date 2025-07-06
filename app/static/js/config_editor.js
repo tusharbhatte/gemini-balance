@@ -12,7 +12,7 @@ const PROXY_REGEX =
   /(?:https?|socks5):\/\/(?:[^:@\/]+(?::[^@\/]+)?@)?(?:[^:\/\s]+)(?::\d+)?/g;
 const VERTEX_API_KEY_REGEX = /AQ\.[a-zA-Z0-9_]{50}/g; // 新增 Vertex API Key 正则
 const MASKED_VALUE = "••••••••";
- 
+
 // DOM Elements - Global Scope for frequently accessed elements
 const safetySettingsContainer = document.getElementById(
   "SAFETY_SETTINGS_container"
@@ -31,7 +31,7 @@ const bulkDeleteProxyModal = document.getElementById("bulkDeleteProxyModal");
 const bulkDeleteProxyInput = document.getElementById("bulkDeleteProxyInput");
 const resetConfirmModal = document.getElementById("resetConfirmModal");
 const configForm = document.getElementById("configForm"); // Added for frequent use
- 
+
 // Vertex API Key Modal Elements
 const vertexApiKeyModal = document.getElementById("vertexApiKeyModal");
 const vertexApiKeyBulkInput = document.getElementById("vertexApiKeyBulkInput");
@@ -41,7 +41,7 @@ const bulkDeleteVertexApiKeyModal = document.getElementById(
 const bulkDeleteVertexApiKeyInput = document.getElementById(
   "bulkDeleteVertexApiKeyInput"
 );
- 
+
 // Model Helper Modal Elements
 const modelHelperModal = document.getElementById("modelHelperModal");
 const modelHelperTitleElement = document.getElementById("modelHelperTitle");
@@ -384,7 +384,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   initializeSensitiveFields(); // Initialize sensitive field handling
- 
+
   // Vertex API Key Modal Elements and Events
   const addVertexApiKeyBtn = document.getElementById("addVertexApiKeyBtn");
   const closeVertexApiKeyModalBtn = document.getElementById(
@@ -408,7 +408,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const confirmBulkDeleteVertexApiKeyBtn = document.getElementById(
     "confirmBulkDeleteVertexApiKeyBtn"
   );
- 
+
   if (addVertexApiKeyBtn) {
     addVertexApiKeyBtn.addEventListener("click", () => {
       openModal(vertexApiKeyModal);
@@ -428,7 +428,7 @@ document.addEventListener("DOMContentLoaded", function () {
       "click",
       handleBulkAddVertexApiKeys
     );
- 
+
   if (bulkDeleteVertexApiKeyBtn) {
     bulkDeleteVertexApiKeyBtn.addEventListener("click", () => {
       openModal(bulkDeleteVertexApiKeyModal);
@@ -448,7 +448,7 @@ document.addEventListener("DOMContentLoaded", function () {
       "click",
       handleBulkDeleteVertexApiKeys
     );
- 
+
   // Model Helper Modal Event Listeners
   if (closeModelHelperModalBtn) {
     closeModelHelperModalBtn.addEventListener("click", () =>
@@ -771,7 +771,7 @@ async function initConfig() {
       FAKE_STREAM_EMPTY_DATA_INTERVAL_SECONDS: 5,
       // --- 结束：处理假流式配置的默认值 ---
     };
- 
+
     populateForm(defaultConfig);
     if (configForm) {
       // Ensure form exists
@@ -1187,7 +1187,7 @@ function handleBulkDeleteProxies() {
   }
   bulkDeleteProxyInput.value = "";
 }
- 
+
 /**
  * Handles the bulk addition of Vertex API keys from the modal input.
  */
@@ -1202,10 +1202,10 @@ function handleBulkAddVertexApiKeys() {
   ) {
     return;
   }
- 
+
   const bulkText = vertexApiKeyBulkInput.value;
   const extractedKeys = bulkText.match(VERTEX_API_KEY_REGEX) || [];
- 
+
   const currentKeyInputs = vertexApiKeyContainer.querySelectorAll(
     `.${ARRAY_INPUT_CLASS}.${SENSITIVE_INPUT_CLASS}`
   );
@@ -1216,16 +1216,16 @@ function handleBulkAddVertexApiKeys() {
         : input.value;
     })
     .filter((key) => key && key.trim() !== "" && key !== MASKED_VALUE);
- 
+
   const combinedKeys = new Set([...currentKeys, ...extractedKeys]);
   const uniqueKeys = Array.from(combinedKeys);
- 
+
   vertexApiKeyContainer.innerHTML = ""; // Clear existing items
- 
+
   uniqueKeys.forEach((key) => {
     addArrayItemWithValue("VERTEX_API_KEYS", key); // VERTEX_API_KEYS are sensitive
   });
- 
+
   // Ensure new sensitive inputs are masked
   const newKeyInputs = vertexApiKeyContainer.querySelectorAll(
     `.${ARRAY_INPUT_CLASS}.${SENSITIVE_INPUT_CLASS}`
@@ -1239,7 +1239,7 @@ function handleBulkAddVertexApiKeys() {
       input.dispatchEvent(focusoutEvent);
     }
   });
- 
+
   closeModal(vertexApiKeyModal);
   showNotification(
     `添加/更新了 ${uniqueKeys.length} 个唯一 Vertex 密钥`,
@@ -1247,7 +1247,7 @@ function handleBulkAddVertexApiKeys() {
   );
   vertexApiKeyBulkInput.value = "";
 }
- 
+
 /**
  * Handles the bulk deletion of Vertex API keys based on input from the modal.
  */
@@ -1262,15 +1262,15 @@ function handleBulkDeleteVertexApiKeys() {
   ) {
     return;
   }
- 
+
   const bulkText = bulkDeleteVertexApiKeyInput.value;
   if (!bulkText.trim()) {
     showNotification("请粘贴需要删除的 Vertex API 密钥", "warning");
     return;
   }
- 
+
   const keysToDelete = new Set(bulkText.match(VERTEX_API_KEY_REGEX) || []);
- 
+
   if (keysToDelete.size === 0) {
     showNotification(
       "未在输入内容中提取到有效的 Vertex API 密钥格式",
@@ -1278,10 +1278,10 @@ function handleBulkDeleteVertexApiKeys() {
     );
     return;
   }
- 
+
   const keyItems = vertexApiKeyContainer.querySelectorAll(`.${ARRAY_ITEM_CLASS}`);
   let deleteCount = 0;
- 
+
   keyItems.forEach((item) => {
     const input = item.querySelector(
       `.${ARRAY_INPUT_CLASS}.${SENSITIVE_INPUT_CLASS}`
@@ -1296,9 +1296,9 @@ function handleBulkDeleteVertexApiKeys() {
       deleteCount++;
     }
   });
- 
+
   closeModal(bulkDeleteVertexApiKeyModal);
- 
+
   if (deleteCount > 0) {
     showNotification(`成功删除了 ${deleteCount} 个匹配的 Vertex 密钥`, "success");
   } else {
@@ -1306,33 +1306,34 @@ function handleBulkDeleteVertexApiKeys() {
   }
   bulkDeleteVertexApiKeyInput.value = "";
 }
- 
+
 /**
  * Switches the active configuration tab.
  * @param {string} tabId - The ID of the tab to switch to.
  */
 function switchTab(tabId) {
+  console.log(`Switching to tab: ${tabId}`);
+
+  // 定义选中态和未选中态的样式
+  const activeStyle = "background-color: #3b82f6 !important; color: #ffffff !important; border: 2px solid #2563eb !important; box-shadow: 0 4px 12px -2px rgba(59, 130, 246, 0.4), 0 2px 6px -1px rgba(59, 130, 246, 0.2) !important; transform: translateY(-2px) !important; font-weight: 600 !important;";
+  const inactiveStyle = "background-color: #f8fafc !important; color: #64748b !important; border: 2px solid #e2e8f0 !important; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1) !important; font-weight: 500 !important; transform: none !important;";
+
   // 更新标签按钮状态
   const tabButtons = document.querySelectorAll(".tab-btn");
+  console.log(`Found ${tabButtons.length} tab buttons`);
+
   tabButtons.forEach((button) => {
-    if (button.getAttribute("data-tab") === tabId) {
-      // 激活状态：主色背景，白色文字，添加阴影
-      button.classList.remove(
-        "bg-white",
-        "bg-opacity-50",
-        "text-gray-700",
-        "hover:bg-opacity-70"
-      );
-      button.classList.add("bg-primary-600", "text-white", "shadow-md");
+    const buttonTabId = button.getAttribute("data-tab");
+    if (buttonTabId === tabId) {
+      // 激活状态：直接设置内联样式
+      button.classList.add("active");
+      button.setAttribute("style", activeStyle);
+      console.log(`Applied active style to button: ${buttonTabId}`);
     } else {
-      // 非激活状态：白色背景，灰色文字，无阴影
-      button.classList.remove("bg-primary-600", "text-white", "shadow-md");
-      button.classList.add(
-        "bg-white",
-        "bg-opacity-50",
-        "text-gray-700",
-        "hover:bg-opacity-70"
-      );
+      // 非激活状态：直接设置内联样式
+      button.classList.remove("active");
+      button.setAttribute("style", inactiveStyle);
+      console.log(`Applied inactive style to button: ${buttonTabId}`);
     }
   });
 
@@ -1451,7 +1452,7 @@ function addArrayItemWithValue(key, value) {
   const isSensitive =
     key === "API_KEYS" || isAllowedToken || isVertexApiKey; // 更新敏感判断
   const modelId = isThinkingModel ? generateUUID() : null;
- 
+
   const arrayItem = document.createElement("div");
   arrayItem.className = `${ARRAY_ITEM_CLASS} flex items-center mb-2 gap-2`;
   if (isThinkingModel) {
@@ -1460,9 +1461,9 @@ function addArrayItemWithValue(key, value) {
 
   const inputWrapper = document.createElement("div");
   inputWrapper.className =
-    "flex items-center flex-grow rounded-md focus-within:border-violet-400 focus-within:ring focus-within:ring-violet-400 focus-within:ring-opacity-50";
-  // Apply themed border directly via style, and ensure it has a border
-  inputWrapper.style.border = "1px solid rgba(120, 100, 200, 0.5)";
+    "flex items-center flex-grow rounded-md focus-within:border-blue-500 focus-within:ring focus-within:ring-blue-500 focus-within:ring-opacity-50";
+  // Apply light theme border directly via style
+  inputWrapper.style.border = "1px solid rgba(0, 0, 0, 0.12)";
   inputWrapper.style.backgroundColor = "transparent"; // Ensure wrapper is transparent
 
   const input = createArrayInput(
@@ -1544,14 +1545,14 @@ function createAndAppendBudgetMapItem(mapKey, mapValue, modelId) {
   valueInput.value = isNaN(intValue) ? 0 : intValue;
   valueInput.placeholder = "预算 (整数)";
   valueInput.className = `${MAP_VALUE_INPUT_CLASS} w-24 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-primary-500 focus:ring focus:ring-primary-200 focus:ring-opacity-50`;
-  valueInput.min = 0;
-  valueInput.max = 24576;
+  valueInput.min = -1;
+  valueInput.max = 32767;
   valueInput.addEventListener("input", function () {
-    let val = this.value.replace(/[^0-9]/g, "");
+    let val = this.value.replace(/[^0-9-]/g, "");
     if (val !== "") {
       val = parseInt(val, 10);
-      if (val < 0) val = 0;
-      if (val > 24576) val = 24576;
+      if (val < -1) val = -1;
+      if (val > 32767) val = 32767;
     }
     this.value = val; // Corrected variable name
   });
@@ -2109,7 +2110,7 @@ function renderModelsInModal() {
     modelItemElement.type = "button";
     modelItemElement.textContent = model.id;
     modelItemElement.className =
-      "block w-full text-left px-4 py-2 rounded-md hover:bg-violet-700 focus:bg-violet-700 focus:outline-none transition-colors text-gray-200";
+      "block w-full text-left px-4 py-2 rounded-md hover:bg-blue-100 focus:bg-blue-100 focus:outline-none transition-colors text-gray-700 hover:text-gray-800";
     // Add any other classes for styling, e.g., from existing modals or array items
 
     modelItemElement.addEventListener("click", () =>

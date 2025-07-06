@@ -60,9 +60,13 @@ class Settings(BaseSettings):
     TIME_OUT: int = DEFAULT_TIMEOUT
     MAX_RETRIES: int = MAX_RETRIES
     PROXIES: List[str] = []
+    PROXIES_USE_CONSISTENCY_HASH_BY_API_KEY: bool = True  # 是否使用一致性哈希来选择代理
     VERTEX_API_KEYS: List[str] = []
     VERTEX_EXPRESS_BASE_URL: str = "https://aiplatform.googleapis.com/v1beta1/publishers/google"
- 
+
+    # 智能路由配置
+    URL_NORMALIZATION_ENABLED: bool = False  # 是否启用智能路由映射功能
+
     # 模型相关配置
     SEARCH_MODELS: List[str] = ["gemini-2.0-flash-exp"]
     IMAGE_MODELS: List[str] = ["gemini-2.0-flash-exp"]
@@ -72,6 +76,11 @@ class Settings(BaseSettings):
     SHOW_THINKING_PROCESS: bool = True
     THINKING_MODELS: List[str] = []
     THINKING_BUDGET_MAP: Dict[str, float] = {}
+
+    # TTS相关配置
+    TTS_MODEL: str = "gemini-2.5-flash-preview-tts"
+    TTS_VOICE_NAME: str = "Zephyr"
+    TTS_SPEED: str = "normal"
 
     # 图像生成相关配置
     PAID_KEY: str = ""
@@ -114,7 +123,7 @@ class Settings(BaseSettings):
     USER_FRIENDLY_ERRORS_ENABLED: bool = True  # 是否启用用户友好错误消息
     INCLUDE_TECHNICAL_DETAILS: bool = False    # 是否在错误响应中包含技术细节
     DEBUG_MODE: bool = False                   # 调试模式，显示更详细的错误信息
-    
+
     # 自定义错误消息映射配置（通过环境变量配置）
     CUSTOM_ERROR_MAPPINGS: Dict[str, str] = {}  # 自定义错误消息映射，key为匹配的错误文本，value为替换的友好消息
 
